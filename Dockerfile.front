@@ -1,0 +1,33 @@
+# зависимости фронта
+FROM alpine:3.12.4 as deps-front
+
+RUN apk --no-cache add yarn
+
+ADD ./package.json /web/package.json
+ADD ./yarn.lock /web/yarn.lock
+
+RUN cd /web && yarn install
+
+# сборка фронта
+FROM alpine:3.12.4 as builder-front
+
+RUN apk --no-cache add nodejs npm yarn
+
+ADD . /web
+
+COPY --from=deps-front /web/node_modules /web/node_modules
+COPY --from=deps-front /web/package.json /web/package.json
+COPY --from=deps-front /web/yarn.lock    /web/yarn.lock
+
+RUN cd /web &&  yarn prod
+
+# итоговый образ
+FROM nginx:1.18.0-alpine
+
+COPY --from=builder-front /web/public/static /www/public/static
+
+RUN #addgroup -g 82 -S www-data && \
+    adduser -u 82 -D -S -G www-data www-data && \
+    chown -R www-data: /www
+
+EXPOSE 80
